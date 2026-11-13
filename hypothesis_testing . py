@@ -1,0 +1,55 @@
+"""
+Hypothesis testing on simulated exam scores.
+
+Question: Do students who attended revision sessions score higher than those
+who did not?  Data is SIMULATED (seeded) so results are reproducible.
+
+Run:  python hypothesis_testing.py
+"""
+import numpy as np
+from scipy import stats
+
+rng = np.random.default_rng(42)
+
+# Simulated data: true mean difference of 5 marks, sd = 10
+attended = rng.normal(loc=65, scale=10, size=40)
+not_attended = rng.normal(loc=60, scale=10, size=40)
+
+# --- Step 1: state hypotheses -------------------------------------------
+# H0: mu_attended = mu_not_attended
+# H1: mu_attended != mu_not_attended   (two-sided, alpha = 0.05)
+alpha = 0.05
+
+# --- Step 2: check assumptions -------------------------------------------
+sh_a = stats.shapiro(attended)
+sh_n = stats.shapiro(not_attended)
+lev = stats.levene(attended, not_attended)
+print("Assumption checks")
+print(f"  Shapiro-Wilk (attended):     p = {sh_a.pvalue:.3f}")
+print(f"  Shapiro-Wilk (not attended): p = {sh_n.pvalue:.3f}")
+print(f"  Levene equal variances:      p = {lev.pvalue:.3f}")
+
+# --- Step 3: Welch's t-test (does not assume equal variances) -------------
+t = stats.ttest_ind(attended, not_attended, equal_var=False)
+print("\nWelch two-sample t-test")
+print(f"  t = {t.statistic:.3f}, p = {t.pvalue:.4f}")
+
+# --- Step 4: effect size and confidence interval ---------------------------
+diff = attended.mean() - not_attended.mean()
+n1, n2 = len(attended), len(not_attended)
+v1, v2 = attended.var(ddof=1), not_attended.var(ddof=1)
+se = np.sqrt(v1 / n1 + v2 / n2)
+df = se**4 / ((v1 / n1) ** 2 / (n1 - 1) + (v2 / n2) ** 2 / (n2 - 1))
+ci = (diff - stats.t.ppf(0.975, df) * se, diff + stats.t.ppf(0.975, df) * se)
+pooled_sd = np.sqrt(((n1 - 1) * v1 + (n2 - 1) * v2) / (n1 + n2 - 2))
+cohens_d = diff / pooled_sd
+print(f"  Mean difference = {diff:.2f} marks, 95% CI = ({ci[0]:.2f}, {ci[1]:.2f})")
+print(f"  Cohen's d = {cohens_d:.2f}")
+
+# --- Step 5: non-parametric cross-check -------------------------------------
+u = stats.mannwhitneyu(attended, not_attended, alternative="two-sided")
+print(f"\nMann-Whitney U cross-check: U = {u.statistic:.1f}, p = {u.pvalue:.4f}")
+
+# --- Step 6: decision ---------------------------------------------------------
+decision = "Reject H0" if t.pvalue < alpha else "Fail to reject H0"
+print(f"\nDecision at alpha = {alpha}: {decision}")
